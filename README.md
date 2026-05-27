@@ -20,25 +20,25 @@ no external libraries. Runs on **Linux** and **Windows** (10 v1511+).
  Progress Quest TUI 6.4.1 - Online - Realm: Nessus                              
                                                                                  
  Grumdrig Understeady - Motto: Grind on! EXP │████████████░░░░░░│ 31337/50000  
- Half Orc Vegan Level 12            Currently in Act IV: Woebetide               
+ Half Orc Vegan Level 12            Currently in Act IV (4) - The Garlanded Loyalty of Albatross
                                                                                  
  Executing a Dexterity Monkey for its Wyvern Scales...                          
  │████████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│          
                                                                                  
- Stats:                  │  Equipment:                                           
-  STR       42           │   Weapon      Glowing Bonesaw of Wounding             
-  CON       38           │   Shield      Studded Targe                           
-  DEX       51           │   Helm        Warded Barbute                          
-  INT       29           │   Hauberk     Briny Hauberk of Negation               
-  WIS       33           │   ...                                                 
-  CHA       17           │                                                       
-  HP Max    74           │  Quests:                                              
-  MP Max    46           │   [x] Solve the Mystery of the Missing Sock           
-                         │   [x] Placate the Phrenologist                        
- Inventory:              │   [-] Locate the Enchanted Weapon                     
-  Toad Stone        x3   │                                                       
-  Wererat Tail      x7   │                                                       
-  Gorgon Tooth      x12  │                                                       
+ Stats:                     Equipment:                                           
+  STR       42               Weapon      Glowing Bonesaw of Wounding             
+  CON       38               Shield      Studded Targe                           
+  DEX       51               Helm        Warded Barbute                          
+  INT       29               Hauberk     Briny Hauberk of Negation               
+  WIS       33               ...                                                 
+  CHA       17                                                                   
+  HP Max    74              Quests:                                              
+  MP Max    46               [x] Solve the Mystery of the Missing Sock           
+                             [x] Placate the Phrenologist                        
+ Inventory:                  [-] Locate the Enchanted Weapon                     
+  Toad stone        x3                                                           
+  Wererat tail      x7                                                           
+  Gorgon tooth      x12                                                          
                                                                                  
  Encum │████████░░│ 81/139   │  Plot  │██████████░░░░░│ 2103/4200               
  Keys  [Q]uit  [S]ave  [E]xport  [B]rag Online  │  Quest │████░░░░░░░░░░░│ 1750/9000
