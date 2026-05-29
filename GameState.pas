@@ -81,8 +81,10 @@ type
     EncumBarHint:  string;   { e.g. "7618/8139 cubits" }
     TaskBarHint:   string;   { task progress tooltip }
     GuildHint:     string;   { guild name — Label1.Hint; set via Ctrl+G in Delphi }
-    { Runtime-only: bumped by GameLogic when stats/equipment change; used by TUI cache }
-    StaticSeq: LongInt;
+    { Runtime-only: bumped by GameLogic when stats/equipment/spells change; used by TUI cache }
+    StaticSeq:    LongInt;
+    { Runtime-only: bumped on every inventory mutation; used by TUI body cache }
+    InventorySeq: LongInt;
   end;
 
 procedure InitNewGame(var GS: TGameState);
@@ -140,6 +142,7 @@ begin
   GS.TaskBarHint   := '';
   GS.GuildHint     := '';
   GS.StaticSeq     := 0;
+  GS.InventorySeq  := 0;
 end;
 
 function GS_InvIdx(const GS: TGameState; const Key: string): Integer;
@@ -173,6 +176,7 @@ begin
     GS.Inventory[n].Val := Val;
   end else
     GS.Inventory[i].Val := Val;
+  Inc(GS.InventorySeq);
 end;
 
 procedure GS_AddInv(var GS: TGameState; const Key: string; Delta: Integer);
@@ -221,6 +225,7 @@ begin
     GS.Spells[n].Val := IntToRoman(Delta);
   end else
     GS.Spells[i].Val := IntToRoman(RomanToInt(GS.Spells[i].Val) + Delta);
+  Inc(GS.StaticSeq);  { spell list changed — invalidate TUI static cache }
 end;
 
 end.

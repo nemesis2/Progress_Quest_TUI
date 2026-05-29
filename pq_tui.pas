@@ -297,10 +297,16 @@ var
   DrawTick: Integer;
   prevLevel, prevPlots: Integer;
   completedAct: TListItem;
+  Minimized: Boolean;
+  LastTaskText, LastTaskItem: string;
 begin
   InitTime(LastTick);
   LastSaveTime := LastTick div 1000;
   Running := True;
+  Minimized    := False;
+  LastTaskText := #0;   { sentinel: differs from any real TaskText on first draw }
+  LastTaskItem := #0;
+  taskDesc     := '';
   DrawTick := 1;  { start at 1 so first iteration draws }
 
   while Running do begin
@@ -335,6 +341,11 @@ begin
         if Brag(GS, 'b') then  { False only for offline chars (TraitsTag=0) }
           TUI_Toast('Brag posted to progressquest.com.');
       end;
+      Ord('m'), Ord('M'): begin
+        Minimized := not Minimized;
+        TUI_Clear;
+        DrawTick := 100;  { force draw on next cycle }
+      end;
     else
       if key <> -1 then ; { ignore other keys }
     end;
@@ -366,12 +377,17 @@ begin
         AutoSave;
       end;
 
-      { Draw TUI every 2 ticks (200 ms); game tick speed is unaffected }
+      { Draw TUI every 2 ticks (200 ms) normally, or every 50 ticks (5 s) when minimized }
       Inc(DrawTick);
-      if DrawTick >= 2 then begin
+      if (Minimized and (DrawTick >= 50)) or ((not Minimized) and (DrawTick >= 2)) then begin
         DrawTick := 0;
-        taskDesc := GetTaskDescription;
-        TUI_Draw(GS, taskDesc);
+        { Recompute task description only when the task actually changes }
+        if (GS.TaskText <> LastTaskText) or (GS.TaskItem <> LastTaskItem) then begin
+          taskDesc     := GetTaskDescription;
+          LastTaskText := GS.TaskText;
+          LastTaskItem := GS.TaskItem;
+        end;
+        TUI_Draw(GS, taskDesc, Minimized);
       end;
     end;
 

@@ -11,7 +11,7 @@ uses SysUtils, GameState, GameData, Math
 procedure TUI_Init;
 procedure TUI_Shutdown;
 procedure TUI_Clear;
-procedure TUI_Draw(const GS: TGameState; const TaskDescription: string);
+procedure TUI_Draw(const GS: TGameState; const TaskDescription: string; Minimized: Boolean);
 procedure TUI_Prompt(const Prompt: string; var Input: string);
 function  TUI_GetKey: Integer;   { non-blocking: returns -1 if no input }
 function  TUI_WaitKey: Integer;  { blocks until a key is pressed }
@@ -106,11 +106,37 @@ var
    DrawLeft, DrawRight: array of string;
    DrawChanged: array of Boolean;
    DrawLines: array of string;   { current frame; swapped with PrevLines each draw }
-   { Static section cache: stats (header + STAT_COUNT rows) and equipment (header + EQUIP_SLOTS rows) }
+   { Static section cache: stats and equipment — keyed on StaticSeq + width }
    CachedStatLeft:  array[0..8]  of string;   { 1 + STAT_COUNT  = 9  }
    CachedStatRight: array[0..11] of string;   { 1 + EQUIP_SLOTS = 12 }
    CachedSeqStatic: LongInt;
    CachedStatWidth: Integer;
+   { Race/Class/Level row — keyed on StaticSeq + lw (independent of Minimized path) }
+   CachedRow3L:    string;
+   CachedRow3LSeq: LongInt;
+   CachedRow3LW:   Integer;
+   { Session-static cache: rows that never change during gameplay, keyed on terminal width }
+   CachedSessWidth:     Integer;   { -1 = not yet built }
+   CachedRow0:          string;    { title bar — normal mode }
+   CachedRow0Min:       string;    { title bar — minimized mode }
+   CachedRow2L:         string;    { name / motto left }
+   CachedFooterOnL:     string;    { keys footer — online char, normal mode }
+   CachedFooterOffL:    string;    { keys footer — offline char, normal mode }
+   CachedFooterOnMinL:  string;    { keys footer — online char, minimized mode }
+   CachedFooterOffMinL: string;    { keys footer — offline char, minimized mode }
+   { ACT row cache (row 3 right) — keyed on plot count and rw }
+   CachedActR:      string;
+   CachedActPlots:  Integer;
+   CachedActRW:     Integer;
+   { Inventory + quest body cache — keyed on InventorySeq, quest count, and geometry }
+   CachedBodyLeft:       array of string;
+   CachedBodyRight:      array of string;
+   CachedBodyInvSeq:     LongInt;
+   CachedBodyQuestCount: Integer;
+   CachedBodyStaticSeq:  LongInt;   { spells change with StaticSeq }
+   CachedBodyLW:         Integer;
+   CachedBodyRW:         Integer;
+   CachedBodyTermRows:   Integer;
    { Toast notification — bottom-row transient message }
    ToastMsg:   string;
    ToastTicks: Integer;   { TUI_Draw calls remaining; 10 × 200 ms ≈ 2 s }
@@ -181,6 +207,17 @@ begin
   ResizePending := False;
   CachedSeqStatic := -1;
   CachedStatWidth := 0;
+  CachedSessWidth      := -1;
+  CachedRow3LSeq       := -1;
+  CachedRow3LW         := -1;
+  CachedActPlots       := -1;
+  CachedActRW          := -1;
+  CachedBodyInvSeq     := -1;
+  CachedBodyQuestCount := -1;
+  CachedBodyStaticSeq  := -1;
+  CachedBodyLW         := -1;
+  CachedBodyRW         := -1;
+  CachedBodyTermRows   := -1;
   ToastMsg   := '';
   ToastTicks := 0;
   hIn  := GetStdHandle(STD_INPUT_HANDLE);
@@ -196,6 +233,17 @@ begin
   ResizePending := False;
   CachedSeqStatic := -1;
   CachedStatWidth := 0;
+  CachedSessWidth      := -1;
+  CachedRow3LSeq       := -1;
+  CachedRow3LW         := -1;
+  CachedActPlots       := -1;
+  CachedActRW          := -1;
+  CachedBodyInvSeq     := -1;
+  CachedBodyQuestCount := -1;
+  CachedBodyStaticSeq  := -1;
+  CachedBodyLW         := -1;
+  CachedBodyRW         := -1;
+  CachedBodyTermRows   := -1;
   ToastMsg   := '';
   ToastTicks := 0;
   GetTerminalSize;
@@ -325,7 +373,7 @@ begin
                         RepStrUTF8(BAR_EMPTY, n - filled) + BAR_RIGHT;
 end;
 
-procedure TUI_Draw(const GS: TGameState; const TaskDescription: string);
+procedure TUI_Draw(const GS: TGameState; const TaskDescription: string; Minimized: Boolean);
 var
    RC: Integer;
    yL, yR: Integer;
@@ -375,37 +423,97 @@ begin
      DrawRight[r] := '';
    end;
 
-   { Row 1: Title bar — shows online/offline status based on TraitsTag }
-   if GS.TraitsTag <> 0 then begin
-     if GS.SpellsHint <> '' then
-       titleText := ' Progress Quest TUI 6.4.1 - Online - Realm: ' + GS.SpellsHint + ' '
+   { Session-static rows: rebuilt only when terminal width changes }
+   if width <> CachedSessWidth then begin
+     CachedSessWidth := width;
+     if GS.TraitsTag <> 0 then begin
+       if GS.SpellsHint <> '' then
+         titleText := ' Progress Quest TUI 6.4.1 - Online - Realm: ' + GS.SpellsHint + ' '
+       else
+         titleText := ' Progress Quest TUI 6.4.1 - Online - Realm: Knoram ';
+     end else
+       titleText := ' Progress Quest TUI 6.4.1 - Offline ';
+     CachedRow0 := INVERSE + PadStr(titleText, width) + NORMAL;
+     if GS.TraitsTag <> 0 then begin
+       if GS.SpellsHint <> '' then
+         titleText := ' Progress Quest TUI 6.4.1 - Online - Realm: ' + GS.SpellsHint + ' - Minimal Mode'
+       else
+         titleText := ' Progress Quest TUI 6.4.1 - Online - Realm: Knoram - Minimal Mode';
+     end else
+       titleText := ' Progress Quest TUI 6.4.1 - Offline - Minimal Mode';
+     CachedRow0Min := INVERSE + PadStr(titleText, width) + NORMAL;
+     if GS.StatsHint <> '' then
+       CachedRow2L := PadStr(COLOR_CYAN + TruncateStr(GS.CharName + ' - ' + GS.StatsHint, lw) + NORMAL, lw + 1)
      else
-       titleText := ' Progress Quest TUI 6.4.1 - Online - Realm: Knoram ';
-   end else
-     titleText := ' Progress Quest TUI 6.4.1 - Offline ';
-   DrawLeft[0] := INVERSE + PadStr(titleText, width) + NORMAL;
+       CachedRow2L := PadStr(COLOR_CYAN + TruncateStr(GS.CharName, lw) + NORMAL, lw + 1);
+     CachedFooterOnL    := PadStr(COLOR_YELLOW + 'Keys  [' + NORMAL + BOLD + 'Q' + NORMAL + COLOR_YELLOW + ']uit  [' +
+                                  NORMAL + BOLD + 'S' + NORMAL + COLOR_YELLOW + ']ave  [' + NORMAL + BOLD + 'E' + NORMAL + COLOR_YELLOW + ']xport  [' +
+                                  NORMAL + BOLD + 'B' + NORMAL + COLOR_YELLOW + ']rag  [' + NORMAL + BOLD + 'M' + NORMAL + COLOR_YELLOW + ']in', lw + 1);
+     CachedFooterOffL   := PadStr(COLOR_YELLOW + 'Keys  [' + NORMAL + BOLD + 'Q' + NORMAL + COLOR_YELLOW + ']uit  [' +
+                                  NORMAL + BOLD + 'S' + NORMAL + COLOR_YELLOW + ']ave  [' + NORMAL + BOLD + 'E' + NORMAL + COLOR_YELLOW + ']xport  [' +
+                                  NORMAL + BOLD + 'M' + NORMAL + COLOR_YELLOW + ']in', lw + 1);
+     CachedFooterOnMinL := PadStr(COLOR_YELLOW + 'Keys  [' + NORMAL + BOLD + 'Q' + NORMAL + COLOR_YELLOW + ']uit  [' +
+                                  NORMAL + BOLD + 'S' + NORMAL + COLOR_YELLOW + ']ave  [' + NORMAL + BOLD + 'E' + NORMAL + COLOR_YELLOW + ']xport  [' +
+                                  NORMAL + BOLD + 'B' + NORMAL + COLOR_YELLOW + ']rag  [' + NORMAL + BOLD + 'M' + NORMAL + COLOR_YELLOW + ']ax', lw + 1);
+     CachedFooterOffMinL := PadStr(COLOR_YELLOW + 'Keys  [' + NORMAL + BOLD + 'Q' + NORMAL + COLOR_YELLOW + ']uit  [' +
+                                   NORMAL + BOLD + 'S' + NORMAL + COLOR_YELLOW + ']ave  [' + NORMAL + BOLD + 'E' + NORMAL + COLOR_YELLOW + ']xport  [' +
+                                   NORMAL + BOLD + 'M' + NORMAL + COLOR_YELLOW + ']ax', lw + 1);
+   end;
+
+   { Row 1: Title bar }
+   if Minimized then
+     DrawLeft[0] := CachedRow0Min
+   else
+     DrawLeft[0] := CachedRow0;
 
    { Row 2: blank separator }
 
    { Row 3: Name (L) + EXP bar (R) }
-   if GS.StatsHint <> '' then
-     DrawLeft[2] := PadStr(COLOR_CYAN + TruncateStr(GS.CharName + ' - ' + GS.StatsHint, lw) + NORMAL, lw + 1)
-   else
-     DrawLeft[2] := PadStr(COLOR_CYAN + TruncateStr(GS.CharName, lw) + NORMAL, lw + 1);
+   DrawLeft[2] := CachedRow2L;
    expPct := ProgressBarText(GS.ExpPos, GS.ExpMax, rw - 25);
    DrawRight[2] := PadStr(TruncateStr(COLOR_YELLOW + Format('EXP %s %d/%d', [expPct, Integer(GS.ExpPos), Integer(GS.ExpMax)]) + NORMAL, rw), rw);
 
-   { Row 4: Race / Class / Level (L) + Current ACT name (R) }
-   DrawLeft[3] := PadStr(COLOR_CYAN + TruncateStr(GS.Race + ' ' + GS.Klass + ' Level ' + NORMAL + IntToStr(GS.Level) + NORMAL, lw) + NORMAL, lw + 1);
-   if Length(GS.Plots) > 0 then begin
-     actText    := GS.Plots[Length(GS.Plots)-1].Text;
-     actSubText := GS.Plots[Length(GS.Plots)-1].SubText;
-     actNum     := RomanToInt(Copy(actText, 5, Length(actText)));
-     if actSubText <> '' then
-       DrawRight[3] := PadStr(TruncateStr(COLOR_YELLOW + 'Currently in ' + NORMAL + actText + ' (' + IntToStr(actNum) + ')' + ' - ' + actSubText, rw), rw)
-     else
-       DrawRight[3] := PadStr(TruncateStr(COLOR_YELLOW + 'Currently in ' + NORMAL + actText + ' (' + IntToStr(actNum) + ')', rw), rw);
+   { Row 4: Race/Class/Level (L) — cached on StaticSeq+lw; ACT (R) — cached on plot count+rw }
+   if (GS.StaticSeq <> CachedRow3LSeq) or (lw <> CachedRow3LW) then begin
+     CachedRow3L   := PadStr(COLOR_CYAN + TruncateStr(GS.Race + ' ' + GS.Klass + ' Level ' + NORMAL + IntToStr(GS.Level) + NORMAL, lw) + NORMAL, lw + 1);
+     CachedRow3LSeq := GS.StaticSeq;
+     CachedRow3LW   := lw;
    end;
+   DrawLeft[3] := CachedRow3L;
+   if (Length(GS.Plots) <> CachedActPlots) or (rw <> CachedActRW) then begin
+     CachedActPlots := Length(GS.Plots);
+     CachedActRW    := rw;
+     if Length(GS.Plots) > 0 then begin
+       actText    := GS.Plots[Length(GS.Plots)-1].Text;
+       actSubText := GS.Plots[Length(GS.Plots)-1].SubText;
+       actNum     := RomanToInt(Copy(actText, 5, Length(actText)));
+       if actSubText <> '' then
+         CachedActR := PadStr(TruncateStr(COLOR_YELLOW + 'Currently in ' + NORMAL + actText + ' (' + IntToStr(actNum) + ')' + ' - ' + actSubText, rw), rw)
+       else
+         CachedActR := PadStr(TruncateStr(COLOR_YELLOW + 'Currently in ' + NORMAL + actText + ' (' + IntToStr(actNum) + ')', rw), rw);
+     end else
+       CachedActR := '';
+   end;
+   DrawRight[3] := CachedActR;
+
+   if Minimized then begin
+     barW := lw - 20;
+     if barW < 8 then barW := 8;
+     encumPct := ProgressBarText(GS.EncumPos, GS.EncumMax, barW);
+     DrawLeft[5] := PadStr(TruncateStr(COLOR_YELLOW + Format('Encum %s %d/%d', [encumPct, Integer(GS.EncumPos), Integer(GS.EncumMax)]) + NORMAL, lw), lw);
+     barW := rw - 24;
+     if barW < 8 then barW := 8;
+     questPct := ProgressBarText(GS.QuestPos, GS.QuestMax, barW);
+     questPos := Format('%d/%d', [Integer(GS.QuestPos), Integer(GS.QuestMax)]);
+     DrawRight[6] := PadStr(TruncateStr(COLOR_YELLOW + Format('Quest %s %s', [questPct, questPos]) + NORMAL, rw), rw);
+     if GS.TraitsTag <> 0 then
+       DrawLeft[6] := CachedFooterOnMinL
+     else
+       DrawLeft[6] := CachedFooterOffMinL;
+     plotPct := ProgressBarText(GS.PlotPos, GS.PlotMax, barW);
+     plotPos := Format('%d/%d', [Integer(GS.PlotPos), Integer(GS.PlotMax)]);
+     DrawRight[5] := PadStr(TruncateStr(COLOR_YELLOW + Format('Plot  %s %s', [plotPct, plotPos]) + NORMAL, rw), rw);
+   end else begin
 
    { Row 5: blank separator }
 
@@ -467,89 +575,116 @@ begin
 
    { Footer (L) + Quest bar (R) }
    if GS.TraitsTag <> 0 then
-     DrawLeft[TermRows-2] := PadStr(COLOR_YELLOW + 'Keys  [' + NORMAL + BOLD + 'Q' + NORMAL + COLOR_YELLOW +']uit  [' +
-                                    NORMAL + BOLD + 'S' + NORMAL + COLOR_YELLOW +']ave  [' + NORMAL + BOLD + 'E' + NORMAL + COLOR_YELLOW + ']xport  [' +
-                                    NORMAL + BOLD + 'B' + NORMAL + COLOR_YELLOW + ']rag Online', lw + 1)
+     DrawLeft[TermRows-2] := CachedFooterOnL
    else
-     DrawLeft[TermRows-2] := PadStr(COLOR_YELLOW + 'Keys  [' + NORMAL + BOLD + 'Q' + NORMAL + COLOR_YELLOW +']uit  [' +
-                                    NORMAL + BOLD + 'S' + NORMAL + COLOR_YELLOW +']ave  [' + NORMAL + BOLD + 'E' + NORMAL + COLOR_YELLOW + ']xport', lw + 1);
+     DrawLeft[TermRows-2] := CachedFooterOffL;
    questPct := ProgressBarText(GS.QuestPos, GS.QuestMax, barW);
    questPos := Format('%d/%d', [Integer(GS.QuestPos), Integer(GS.QuestMax)]);
    DrawRight[TermRows-2] := PadStr(TruncateStr(COLOR_YELLOW + Format('Quest %s %s', [questPct, questPos]) + NORMAL, rw), rw);
 
-   { Inventory }
+   { Inventory + Quests + Spells — rebuilt only when content or geometry changes }
    spellTop := (yL + bodyBottom + 1) div 2;
    if spellTop < yL + 2 then spellTop := yL + 2;
    if spellTop > bodyBottom then spellTop := bodyBottom;
    if yL > spellTop - 1 then yL := spellTop - 1;
-   invCount := Length(GS.Inventory);
-   { maxInv = item rows available, not counting the header row }
-   maxInv := (spellTop - 1) - yL;
-   if (maxInv > 0) and (invCount > 0) then begin
-     DrawLeft[yL-1] := PadStr(COLOR_CYAN + 'Inventory:' + NORMAL, lw + 1);
-     Inc(yL);
-     { nameFld = longest visible item name + 3 padding, capped to fit the panel }
-     if invCount <= maxInv then r := invCount else r := maxInv - 1;
-     nameFld := 0;
-     for i := 0 to r - 1 do
-       if Length(GS.Inventory[i].Key) > nameFld then
-         nameFld := Length(GS.Inventory[i].Key);
-     Inc(nameFld, 3);
-     if nameFld > lw - 7 then nameFld := lw - 7;
-     if nameFld < 10 then nameFld := 10;
-     if invCount <= maxInv then begin
-       for i := 0 to invCount-1 do begin
-         DrawLeft[yL-1] := PadStr(TruncateStr(' ' + PadStr(TruncateStr(GS.Inventory[i].Key, nameFld), nameFld) + 'x' + GS.Inventory[i].Val, lw + 1), lw + 1);
-         Inc(yL);
-       end;
-     end else begin
-       for i := 0 to maxInv-2 do begin
-         DrawLeft[yL-1] := PadStr(TruncateStr(' ' + PadStr(TruncateStr(GS.Inventory[i].Key, nameFld), nameFld) + 'x' + GS.Inventory[i].Val, lw + 1), lw + 1);
-         Inc(yL);
-       end;
-       DrawLeft[yL-1] := PadStr(Format(' ... %d more', [invCount - (maxInv - 1)]), lw + 1);
-     end;
-   end;
 
-   { Quests }
-   if yR > bodyBottom then yR := bodyBottom;
-   questCount := Length(GS.Quests);
-   maxQuest := bodyBottom - yR;
-   if questCount < maxQuest then maxQuest := questCount;
-   if maxQuest > 0 then begin
-     DrawRight[yR-1] := PadStr(COLOR_CYAN + 'Quests:' + NORMAL, rw);
-     Inc(yR);
-     for i := Max(0, questCount-maxQuest) to questCount-1 do begin
-       if GS.Quests[i].Done then
-         DrawRight[yR-1] := ' ' + COLOR_GREEN + '[x]' + NORMAL
-       else if i = questCount-1 then
-         DrawRight[yR-1] := ' ' + COLOR_YELLOW + '[-]' + NORMAL
-       else
-         DrawRight[yR-1] := ' [ ]';
-       DrawRight[yR-1] := DrawRight[yR-1] + PadStr(' ' + TruncateStr(GS.Quests[i].Text, rw - 5), rw - 4);
+   if (GS.InventorySeq  <> CachedBodyInvSeq)     or
+      (Length(GS.Quests) <> CachedBodyQuestCount) or
+      (GS.StaticSeq      <> CachedBodyStaticSeq)  or
+      (lw                <> CachedBodyLW)          or
+      (rw                <> CachedBodyRW)          or
+      (TermRows          <> CachedBodyTermRows)    then begin
+
+     CachedBodyInvSeq     := GS.InventorySeq;
+     CachedBodyQuestCount := Length(GS.Quests);
+     CachedBodyStaticSeq  := GS.StaticSeq;
+     CachedBodyLW         := lw;
+     CachedBodyRW         := rw;
+     CachedBodyTermRows   := TermRows;
+
+     { (Re)size cache arrays to cover the full terminal height }
+     if Length(CachedBodyLeft)  <> TermRows then SetLength(CachedBodyLeft,  TermRows);
+     if Length(CachedBodyRight) <> TermRows then SetLength(CachedBodyRight, TermRows);
+     for i := 0 to TermRows - 1 do begin
+       CachedBodyLeft[i]  := '';
+       CachedBodyRight[i] := '';
+     end;
+
+     { Inventory }
+     invCount := Length(GS.Inventory);
+     maxInv   := (spellTop - 1) - yL;
+     if (maxInv > 0) and (invCount > 0) then begin
+       CachedBodyLeft[yL-1] := PadStr(COLOR_CYAN + 'Inventory:' + NORMAL, lw + 1);
+       Inc(yL);
+       if invCount <= maxInv then r := invCount else r := maxInv - 1;
+       nameFld := 0;
+       for i := 0 to r - 1 do
+         if Length(GS.Inventory[i].Key) > nameFld then
+           nameFld := Length(GS.Inventory[i].Key);
+       Inc(nameFld, 3);
+       if nameFld > lw - 7 then nameFld := lw - 7;
+       if nameFld < 10 then nameFld := 10;
+       if invCount <= maxInv then begin
+         for i := 0 to invCount-1 do begin
+           CachedBodyLeft[yL-1] := PadStr(TruncateStr(' ' + PadStr(TruncateStr(GS.Inventory[i].Key, nameFld), nameFld) + 'x' + GS.Inventory[i].Val, lw + 1), lw + 1);
+           Inc(yL);
+         end;
+       end else begin
+         for i := 0 to maxInv-2 do begin
+           CachedBodyLeft[yL-1] := PadStr(TruncateStr(' ' + PadStr(TruncateStr(GS.Inventory[i].Key, nameFld), nameFld) + 'x' + GS.Inventory[i].Val, lw + 1), lw + 1);
+           Inc(yL);
+         end;
+         CachedBodyLeft[yL-1] := PadStr(Format(' ... %d more', [invCount - (maxInv - 1)]), lw + 1);
+       end;
+     end;
+
+     { Quests }
+     if yR > bodyBottom then yR := bodyBottom;
+     questCount := Length(GS.Quests);
+     maxQuest := bodyBottom - yR;
+     if questCount < maxQuest then maxQuest := questCount;
+     if maxQuest > 0 then begin
+       CachedBodyRight[yR-1] := PadStr(COLOR_CYAN + 'Quests:' + NORMAL, rw);
        Inc(yR);
+       for i := Max(0, questCount-maxQuest) to questCount-1 do begin
+         if GS.Quests[i].Done then
+           CachedBodyRight[yR-1] := ' ' + COLOR_GREEN + '[x]' + NORMAL
+         else if i = questCount-1 then
+           CachedBodyRight[yR-1] := ' ' + COLOR_YELLOW + '[-]' + NORMAL
+         else
+           CachedBodyRight[yR-1] := ' [ ]';
+         CachedBodyRight[yR-1] := CachedBodyRight[yR-1] + PadStr(' ' + TruncateStr(GS.Quests[i].Text, rw - 5), rw - 4);
+         Inc(yR);
+       end;
+     end;
+
+     { Spells }
+     spellCount := Length(GS.Spells);
+     maxSpells  := bodyBottom - spellTop;
+     if maxSpells < 1 then maxSpells := 1;
+     for i := 0 to maxSpells do begin
+       if i = 0 then begin
+         if spellCount > 0 then
+           CachedBodyLeft[spellTop + i - 1] := PadStr(COLOR_CYAN + 'Spells: ' + NORMAL, lw + 1)
+         else
+           CachedBodyLeft[spellTop + i - 1] := PadStr('', lw + 1);
+       end else begin
+         spellIdx := spellCount - maxSpells + i - 1;
+         if spellIdx >= 0 then begin
+           spellLine := GS.Spells[spellIdx].Key + Format(' %s (%d)', [GS.Spells[spellIdx].Val, RomanToInt(GS.Spells[spellIdx].Val)]);
+           CachedBodyLeft[spellTop + i - 1] := PadStr(' ' + TruncateStr(spellLine, lw - 1), lw + 1);
+         end else
+           CachedBodyLeft[spellTop + i - 1] := PadStr('', lw + 1);
+       end;
      end;
    end;
 
-   { Spells }
-   spellCount := Length(GS.Spells);
-   maxSpells := bodyBottom - spellTop;
-   if maxSpells < 1 then maxSpells := 1;
-   for i := 0 to maxSpells do begin
-     if i = 0 then begin
-       if spellCount > 0 then
-         DrawLeft[spellTop + i - 1] := PadStr(COLOR_CYAN + 'Spells: ' + NORMAL, lw + 1)
-       else
-         DrawLeft[spellTop + i - 1] := PadStr('', lw + 1);
-     end else begin
-       spellIdx := spellCount - maxSpells + i - 1;
-       if spellIdx >= 0 then begin
-         spellLine := GS.Spells[spellIdx].Key + Format(' %s (%d)', [GS.Spells[spellIdx].Val, RomanToInt(GS.Spells[spellIdx].Val)]);
-         DrawLeft[spellTop + i - 1] := PadStr(' ' + TruncateStr(spellLine, lw - 1), lw + 1);
-       end else
-         DrawLeft[spellTop + i - 1] := PadStr('', lw + 1);
-     end;
+   { Copy body cache into the current frame }
+   for i := 0 to TermRows - 1 do begin
+     if CachedBodyLeft[i]  <> '' then DrawLeft[i]  := CachedBodyLeft[i];
+     if CachedBodyRight[i] <> '' then DrawRight[i] := CachedBodyRight[i];
    end;
+   end; { not Minimized }
 
    { Toast notification — bottom row, auto-expires after ToastTicks frames }
    if ToastTicks > 0 then begin
@@ -582,7 +717,7 @@ begin
      frame := '';
      for r := 0 to TermRows-1 do
        if DrawChanged[r] then begin
-         if (r = 0) or (r = 5) or (r = 6) then
+         if (r = 0) or (not Minimized and ((r = 5) or (r = 6))) then
            frame := frame + CSI + Format('%d;1H', [r+1]) +
                                 DrawLeft[r] +
                                 CSI + Format('%d;%dH', [r+1, RC]) + DrawRight[r]
