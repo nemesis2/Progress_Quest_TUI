@@ -1,4 +1,4 @@
-# Progress Quest 6.4 — TUI Port
+# Progress Quest 6.4.1 — TUI Port
 
 > *"Gone are the tedious micromanagement and other frustrations common to that older
 > generation of RPGs."*
@@ -8,7 +8,7 @@ Your character auto-levels, auto-quests, and auto-loots — no input needed beyo
 character creation. It is a loving parody of MMO grinding culture.
 
 This repository is a **Free Pascal port** of the original
-[Progress Quest 6.4](http://progressquest.com) (Delphi 6 / Windows) to a
+[Progress Quest 6.4](http://progressquest.com) (Delphi 6 / Windows), version **6.4.1**, to a
 cross-platform terminal UI using raw ANSI escape codes — no curses dependency,
 no external libraries. Runs on **Linux** and **Windows** (10 v1511+).
 
@@ -20,25 +20,25 @@ no external libraries. Runs on **Linux** and **Windows** (10 v1511+).
  Progress Quest TUI 6.4.1 - Online - Realm: Nessus                              
                                                                                  
  Grumdrig Understeady - Motto: Grind on! EXP │████████████░░░░░░│ 31337/50000  
- Half Orc Vegan Level 12            Currently in Act IV (4) - The Garlanded Loyalty of Albatross
+ Half Orc Vegan Level 12            Currently in Act IV: Woebetide               
                                                                                  
  Executing a Dexterity Monkey for its Wyvern Scales...                          
  │████████████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│          
                                                                                  
- Stats:                     Equipment:                                           
-  STR       42               Weapon      Glowing Bonesaw of Wounding             
-  CON       38               Shield      Studded Targe                           
-  DEX       51               Helm        Warded Barbute                          
-  INT       29               Hauberk     Briny Hauberk of Negation               
-  WIS       33               ...                                                 
-  CHA       17                                                                   
-  HP Max    74              Quests:                                              
-  MP Max    46               [x] Solve the Mystery of the Missing Sock           
-                             [x] Placate the Phrenologist                        
- Inventory:                  [-] Locate the Enchanted Weapon                     
-  Toad stone        x3                                                           
-  Wererat tail      x7                                                           
-  Gorgon tooth      x12                                                          
+ Stats:                  │  Equipment:                                           
+  STR       42           │   Weapon      Glowing Bonesaw of Wounding             
+  CON       38           │   Shield      Studded Targe                           
+  DEX       51           │   Helm        Warded Barbute                          
+  INT       29           │   Hauberk     Briny Hauberk of Negation               
+  WIS       33           │   ...                                                 
+  CHA       17           │                                                       
+  HP Max    74           │  Quests:                                              
+  MP Max    46           │   [x] Solve the Mystery of the Missing Sock           
+                         │   [x] Placate the Phrenologist                        
+ Inventory:              │   [-] Locate the Enchanted Weapon                     
+  Toad Stone        x3   │                                                       
+  Wererat Tail      x7   │                                                       
+  Gorgon Tooth      x12  │                                                       
                                                                                  
  Encum │████████░░│ 81/139   │  Plot  │██████████░░░░░│ 2103/4200               
  Keys  [Q]uit  [S]ave  [E]xport  [B]rag Online  │  Quest │████░░░░░░░░░░░│ 1750/9000
@@ -99,12 +99,22 @@ Installing it does not affect binary size — the objects are found but not pull
 ./pq_tui save.pq3                   # load existing save file
 ./pq_tui -export save.pq3           # load and export .sheet on each save
 ./pq_tui -export-only save.pq3      # export .sheet then exit
+./pq_tui -no-backup save.pq3        # load without writing a backup on save
 ./pq_tui -set-motto save.pq3        # interactively set/clear the character motto
 ./pq_tui -motto "My motto" save.pq3 # set motto non-interactively then exit
 ./pq_tui -help                      # show all flags
 ```
 
-**In-game keys:** `q` quit · `s` save · `e` export character sheet · `b` post to leaderboard
+**In-game keys:** `q` quit · `s` save · `e` export character sheet · `b` post to leaderboard · `m` toggle Minimal Mode
+
+### Minimal Mode
+
+Press `m` to toggle **Minimal Mode** — a compact view that collapses the stats,
+equipment, inventory, and quest panels down to just the title bar, name/EXP row,
+race/class/level row, encumbrance, plot progress, and quest progress. The redraw
+rate drops from 5 Hz (every 200 ms) to 0.2 Hz (every 5 s), which considerably
+reduces CPU usage — useful when running in the background or on low-power hardware.
+The title bar shows `- Minimal Mode` when active.
 
 ---
 
